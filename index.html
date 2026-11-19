@@ -351,10 +351,18 @@
   };
 
   // built-in names always show; names a person added on their own device are kept too
-  let lists = Object.assign({}, DEFAULT_LISTS, store.get(LS_LISTS, {}));
+  // A list the person saved on this device wins: names they deleted stay deleted.
+  // Only names that are NEW in this copy of the app (not seen here before) get added to it.
+  const savedLists = store.get(LS_LISTS, {});
+  const seenBuiltin = store.get("prg_seen_builtin_v1", null) || DEFAULT_LISTS;
+  let lists = Object.assign({}, DEFAULT_LISTS, savedLists);
   ["producers","presenters","notes"].forEach(k=>{
-    lists[k] = [...new Set([...(DEFAULT_LISTS[k]||[]), ...(lists[k]||[])])];
+    if(!Array.isArray(savedLists[k])) return;
+    const seen = seenBuiltin[k] || [];
+    const fresh = (DEFAULT_LISTS[k]||[]).filter(x=>!seen.includes(x));
+    lists[k] = [...new Set([...savedLists[k], ...fresh])];
   });
+  store.set("prg_seen_builtin_v1", DEFAULT_LISTS);
   // rename "الترم" to "التيرم" in lists saved by older versions
   lists.terms = [...new Set((lists.terms||[]).map(t=>t.replace(/^الترم(?=\s|$)/,"التيرم")))];
   store.set(LS_LISTS, lists);
