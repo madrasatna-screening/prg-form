@@ -441,7 +441,10 @@
     });
   }
   combo(gradeIn, ()=> GRADES[$k("channel").value] || ALL_GRADES);
-  combo(subjIn, ()=> SUBJECTS);
+  // extra subjects that show only for the guidance-models grade (on top of the usual ones)
+  const NMOZG = "الصف الثالث الإعدادي-النماذج الاسترشادية";
+  const NMOZG_SUBJECTS = ["لغة فرنسية","لغة ألمانية","علوم فرنساوي","رياضيات فرنساوي","حاسب آلى عربي","حاسب آلى إنجليزي","حاسب آلى فرنساوي","تربية دينية إسلامية","تربية دينية مسيحية","تربية فنية"];
+  combo(subjIn, ()=> gradeIn.value.trim()===NMOZG ? SUBJECTS.concat(NMOZG_SUBJECTS) : SUBJECTS);
 
   function updateGrades(){
     // channel changed: clear a grade that belongs to the other channel's list
@@ -456,7 +459,10 @@
   };
   const SUBJECT_CODES = {
     "لغة عربية":"Arabic","لغة إنجليزية":"English","دراسات اجتماعية":"Social",
-    "علوم عربي":"Science_AR","علوم إنجليزي":"Science_EN","رياضيات عربي":"Math_AR","رياضيات إنجليزي":"Math_EN"
+    "علوم عربي":"Science_AR","علوم إنجليزي":"Science_EN","رياضيات عربي":"Math_AR","رياضيات إنجليزي":"Math_EN",
+    "لغة فرنسية":"French","لغة ألمانية":"German","علوم فرنساوي":"Science_FR","رياضيات فرنساوي":"Math_FR",
+    "حاسب آلى عربي":"ICT_AR","حاسب آلى إنجليزي":"ICT_EN","حاسب آلى فرنساوي":"ICT_FR",
+    "تربية دينية إسلامية":"Islamic_Religion","تربية دينية مسيحية":"Christian_Religion","تربية فنية":"Art"
   };
   // grades whose episodes are numbered with a different word than "Eps"
   const EP_PREFIX = { "الصف الثالث الإعدادي-النماذج الاسترشادية":"Nmozg" };
