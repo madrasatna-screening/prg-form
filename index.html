@@ -111,7 +111,7 @@
   #sheet.pdfmode .pv{display:inline;font-size:10pt}
   #sheet.pdfmode .ck .lbl{background:transparent}
   #sheet.pdfmode .notes td .pv{display:block;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #sheet.pdfmode .notes td.desc .pv{white-space:normal;line-height:1.15;font-size:9pt}
+  #sheet.pdfmode .notes td.desc .pv{white-space:normal;line-height:1.15;font-size:9pt;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
   #sheet.pdfmode .title{font-size:15pt;padding:.5mm 0;margin-bottom:1mm}
   #sheet.pdfmode .frame{padding:2mm}
   #sheet.pdfmode .f{min-height:6.6mm}
@@ -135,7 +135,8 @@
     .pv{display:inline;font-size:10pt}
     .ck .lbl{background:transparent}
     .notes td .pv{display:block;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .notes td.desc .pv{white-space:normal;line-height:1.15;font-size:9pt}
+    .notes td.desc .pv{white-space:normal;line-height:1.15;font-size:9pt;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+    #sheet{zoom:var(--pz,1);width:calc(198mm / var(--pz,1))!important}
     *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .title{font-size:15pt;padding:.5mm 0;margin-bottom:1mm}
     .frame{padding:2mm}
@@ -633,6 +634,7 @@
       }
       return;
     }
+    fitPrint();
     document.title = fileBase();
     try{ window.print(); }catch(e){}
   };
@@ -649,7 +651,19 @@
     }catch(e){ note.textContent = "⚠️ معرفتش أجهز الـ PDF، اتأكد من الإنترنت وجرّب تاني"; }
     finally{ btnPdf.disabled = false; btnPdf.textContent = "📄 تنزيل PDF"; }
   };
-  window.addEventListener("beforeprint", ()=>{ document.title = fileBase(); });
+  /* shrink the form when printing so it always fits on one page (A4 or Letter),
+     even when long notes make the rows taller */
+  function fitPrint(){
+    sync();
+    const sh = document.getElementById("sheet");
+    document.documentElement.style.setProperty("--pz", "1");   // measure at full size
+    sh.classList.add("pdfmode");
+    const mm = sh.getBoundingClientRect().height / (96/25.4);
+    sh.classList.remove("pdfmode");
+    const z = Math.min(1, 262 / mm);   // 262mm fits both A4 and Letter with margins
+    document.documentElement.style.setProperty("--pz", z.toFixed(3));
+  }
+  window.addEventListener("beforeprint", ()=>{ fitPrint(); document.title = fileBase(); });
   window.addEventListener("afterprint", ()=>{ document.title = BASE_TITLE; });
   window.addEventListener("beforeprint", sync);
 
