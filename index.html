@@ -171,7 +171,7 @@
 
     <div class="grid">
       <div class="f"><label>Receiving Date:</label><div class="val"><input type="date" data-k="recvDate" data-fmt="date"></div></div>
-      <div class="f"><label>Producer:</label><div class="val"><input class="ar" list="dl-producers" data-k="producer" data-list="producers" placeholder="اختر أو اكتب"></div></div>
+      <div class="f"><label>Producer:</label><div class="val"><div class="combo"><input class="ar" data-k="producer" data-list="producers" placeholder="اختر أو اكتب" autocomplete="off"><ul class="cl" hidden></ul></div></div></div>
 
       <div class="f"><label>Channel:</label><div class="val"><select class="ar" data-k="channel" data-opts="channels"></select></div></div>
       <div class="f"><label>Broadcast Date:</label><div class="val"><input type="date" data-k="bcDate" data-fmt="date"></div></div>
@@ -182,7 +182,7 @@
         <div class="combo"><input class="ar" data-k="subject" data-nopv placeholder="المادة – اختر أو اكتب" autocomplete="off"><ul class="cl" hidden></ul></div>
         <input type="hidden" data-k="program">
       </div></div>
-      <div class="f"><label>PRESENTER :</label><div class="val"><input class="ar" list="dl-presenters" data-k="presenter" data-list="presenters" placeholder="اختر أو اكتب"></div></div>
+      <div class="f"><label>PRESENTER :</label><div class="val"><div class="combo"><input class="ar" data-k="presenter" data-list="presenters" placeholder="اختر أو اكتب" autocomplete="off"><ul class="cl" hidden></ul></div></div></div>
 
       <div class="f"><label>Episode No.:</label><div class="val"><input type="number" min="1" data-k="episode" style="width:30mm"></div></div>
       <div class="f"><label>TERM :</label><div class="val"><select class="ar" data-k="term" data-opts="terms"></select></div></div>
@@ -417,7 +417,7 @@
 
   // combo box: click to pick from the list, or just type anything
   function combo(input, getOpts){
-    const ul = input.nextElementSibling;
+    const ul = input.parentElement.querySelector(".cl");
     function show(){
       const opts = getOpts(), v = input.value.trim();
       const list = (!v || opts.includes(v)) ? opts : opts.filter(o=>o.includes(v));
@@ -453,6 +453,9 @@
   const NMOZG_SUBJECTS = ["لغة فرنسية","لغة ألمانية","علوم فرنساوي","رياضيات فرنساوي","حاسب آلى عربي","حاسب آلى إنجليزي","حاسب آلى فرنساوي","تربية دينية إسلامية","تربية دينية مسيحية","تربية فنية"];
   combo(gradeIn, ()=> GRADES[$k("channel").value] || ALL_GRADES);
   combo(subjIn, ()=> ptype().extra ? SUBJECTS.concat(NMOZG_SUBJECTS) : SUBJECTS);
+  // producer / presenter use the same drop-down, filled from the lists
+  combo($k("producer"), ()=> lists.producers || []);
+  combo($k("presenter"), ()=> lists.presenters || []);
 
   function updateGrades(){
     // channel changed: clear a grade that belongs to the other channel's list
