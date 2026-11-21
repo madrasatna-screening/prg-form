@@ -50,6 +50,7 @@
   .ar{direction:rtl;text-align:right}
   .prog{gap:1mm;direction:rtl;flex-wrap:wrap}
   .combo{position:relative;flex:1 1 100%}
+  .prog .ptype{flex:1 1 100%}
   .combo input{padding-left:20px}
   .combo::after{content:"▾";position:absolute;left:7px;top:50%;transform:translateY(-50%);pointer-events:none;color:#555;font-size:11px}
   .cl{position:absolute;z-index:20;left:0;right:0;top:100%;margin:2px 0 0;padding:3px 0;list-style:none;background:#fff;border:1px solid #9aa4b0;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:220px;overflow:auto}
@@ -176,6 +177,7 @@
       <div class="f"><label>Broadcast Date:</label><div class="val"><input type="date" data-k="bcDate" data-fmt="date"></div></div>
 
       <div class="f"><label>Program:</label><div class="val prog">
+        <select class="ar ptype" data-k="ptype" data-nopv title="البرنامج"></select>
         <div class="combo"><input class="ar" data-k="grade" data-nopv placeholder="الصف – اختر أو اكتب" autocomplete="off"><ul class="cl" hidden></ul></div>
         <div class="combo"><input class="ar" data-k="subject" data-nopv placeholder="المادة – اختر أو اكتب" autocomplete="off"><ul class="cl" hidden></ul></div>
         <input type="hidden" data-k="program">
@@ -403,15 +405,15 @@
     tbody.appendChild(tr);
   }
 
-  /* ---------- Program = grade + subject, grades depend on channel ---------- */
+  /* ---------- Program = program type + grade + subject; grades depend on channel ---------- */
   const GRADES = {
     "مدرستنا 1":["الصف الرابع الابتدائي","الصف الخامس الابتدائي","الصف السادس الابتدائي"],
-    "مدرستنا 2":["الصف الأول الإعدادي","الصف الثاني الإعدادي","الصف الثالث الإعدادي","الصف الثالث الإعدادي-النماذج الاسترشادية"]
+    "مدرستنا 2":["الصف الأول الإعدادي","الصف الثاني الإعدادي","الصف الثالث الإعدادي"]
   };
   const ALL_GRADES = [].concat(...Object.values(GRADES));
   const SUBJECTS = ["لغة عربية","لغة إنجليزية","دراسات اجتماعية","علوم عربي","علوم إنجليزي","رياضيات عربي","رياضيات إنجليزي"];
   const $k = k => document.querySelector(`[data-k="${k}"]`);
-  const gradeIn = $k("grade"), subjIn = $k("subject");
+  const gradeIn = $k("grade"), subjIn = $k("subject"), ptypeSel = $k("ptype");
 
   // combo box: click to pick from the list, or just type anything
   function combo(input, getOpts){
@@ -436,22 +438,31 @@
       ul.hidden = true;
     });
   }
-  combo(gradeIn, ()=> GRADES[$k("channel").value] || ALL_GRADES);
-  // extra subjects that show only for the guidance-models grade (on top of the usual ones)
-  const NMOZG = "الصف الثالث الإعدادي-النماذج الاسترشادية";
+  // program types and how their DESCRIPTION code is built
+  //   lessons : Pri05_Arabic_Eps01          models : Prep03_Math_AR_Nmozg01
+  //   Daleel  : Daleel_Pri05_Arabic_Eps01   Azaker : Azaker_Prep03_Science_EN_Eps01
+  const PTYPES = [
+    {name:"دروس المنهج",            prefix:"",       ep:"Eps"},
+    {name:"النماذج الاسترشادية",     prefix:"",       ep:"Nmozg", extra:true},
+    {name:"دليل المعلم",            prefix:"Daleel", ep:"Eps"},
+    {name:"أذاكر لأولادي ازاي",      prefix:"Azaker", ep:"Eps"}
+  ];
+  ptypeSel.innerHTML = PTYPES.map((t,i)=>`<option value="${i}">${esc(t.name)}</option>`).join("");
+  const ptype = ()=> PTYPES[+ptypeSel.value] || PTYPES[0];
+  // extra subjects offered with the guidance models (on top of the usual ones)
   const NMOZG_SUBJECTS = ["لغة فرنسية","لغة ألمانية","علوم فرنساوي","رياضيات فرنساوي","حاسب آلى عربي","حاسب آلى إنجليزي","حاسب آلى فرنساوي","تربية دينية إسلامية","تربية دينية مسيحية","تربية فنية"];
-  combo(subjIn, ()=> gradeIn.value.trim()===NMOZG ? SUBJECTS.concat(NMOZG_SUBJECTS) : SUBJECTS);
+  combo(gradeIn, ()=> GRADES[$k("channel").value] || ALL_GRADES);
+  combo(subjIn, ()=> ptype().extra ? SUBJECTS.concat(NMOZG_SUBJECTS) : SUBJECTS);
 
   function updateGrades(){
     // channel changed: clear a grade that belongs to the other channel's list
     const g = GRADES[$k("channel").value];
     if(g && ALL_GRADES.includes(gradeIn.value) && !g.includes(gradeIn.value)) gradeIn.value = "";
   }
-  /* ---------- auto DESCRIPTION code, e.g. Pri04_Arabic_Eps01 ---------- */
+  /* ---------- auto DESCRIPTION code ---------- */
   const GRADE_CODES = {
     "الصف الرابع الابتدائي":"Pri04","الصف الخامس الابتدائي":"Pri05","الصف السادس الابتدائي":"Pri06",
-    "الصف الأول الإعدادي":"Prep01","الصف الثاني الإعدادي":"Prep02","الصف الثالث الإعدادي":"Prep03",
-    "الصف الثالث الإعدادي-النماذج الاسترشادية":"Prep03"
+    "الصف الأول الإعدادي":"Prep01","الصف الثاني الإعدادي":"Prep02","الصف الثالث الإعدادي":"Prep03"
   };
   const SUBJECT_CODES = {
     "لغة عربية":"Arabic","لغة إنجليزية":"English","دراسات اجتماعية":"Social",
@@ -460,14 +471,12 @@
     "حاسب آلى عربي":"ICT_AR","حاسب آلى إنجليزي":"ICT_EN","حاسب آلى فرنساوي":"ICT_FR",
     "تربية دينية إسلامية":"Islamic_Religion","تربية دينية مسيحية":"Christian_Religion","تربية فنية":"Art"
   };
-  // grades whose episodes are numbered with a different word than "Eps"
-  const EP_PREFIX = { "الصف الثالث الإعدادي-النماذج الاسترشادية":"Nmozg" };
   let lastAuto = null;
   function autoDesc(){
     const g = gradeIn.value.trim(), sb = subjIn.value.trim(), ep = $k("episode").value.trim();
     if(!g || !sb || !ep) return "";
-    const gc = GRADE_CODES[g] || g, sc = SUBJECT_CODES[sb] || sb;
-    return `${gc}_${sc}_${EP_PREFIX[g]||"Eps"}${String(parseInt(ep,10)||ep).padStart(2,"0")}`;
+    const t = ptype(), num = String(parseInt(ep,10)||ep).padStart(2,"0");
+    return [t.prefix, GRADE_CODES[g]||g, SUBJECT_CODES[sb]||sb].filter(Boolean).join("_") + `_${t.ep}${num}`;
   }
   function updateDesc(){
     const d = $k("desc1"), a = autoDesc();
@@ -476,8 +485,10 @@
     lastAuto = a;
   }
   function updateProgram(){
-    const g = gradeIn.value.trim(), sb = subjIn.value.trim();
-    $k("program").value = [g,sb].filter(Boolean).join(" – ");
+    const g = gradeIn.value.trim(), sb = subjIn.value.trim(), t = ptype();
+    const parts = [g, sb].filter(Boolean);
+    if(+ptypeSel.value !== 0 && parts.length) parts.unshift(t.name);   // lessons are shown as "grade – subject"
+    $k("program").value = parts.join(" – ");
   }
   $k("channel").addEventListener("change", updateGrades);
 
@@ -563,6 +574,11 @@
       });
       if(Array.isArray(data.checks)) checks = data.checks;
       const tm = $k("term"); if(tm.value.startsWith("الترم")){ const nv = tm.value.replace(/^الترم/,"التيرم"); if(![...tm.options].some(o=>o.value===nv)) tm.insertAdjacentHTML("beforeend",`<option>${esc(nv)}</option>`); tm.value = nv; [...tm.options].forEach(o=>{ if(o.value.startsWith("الترم")) o.remove(); }); }
+    }
+    // older versions kept the program inside the grade box
+    if(data){
+      const old = {"الصف الثالث الإعدادي-النماذج الاسترشادية":[1,"الصف الثالث الإعدادي"],"دليل المعلم":[2,""],"أذاكر لأولادي ازاي":[3,""]}[data.grade];
+      if(old){ ptypeSel.value = String(old[0]); gradeIn.value = old[1]; }
     }
     lastAuto = autoDesc();
     ["grade","subject"].forEach(k=>{ if($k(k).value==="__m") $k(k).value = (data && data[k+"Manual"]) || ""; });
@@ -669,7 +685,7 @@
   document.getElementById("btnNew").onclick = ()=> dlgC.showModal();
   document.getElementById("noNew").onclick = ()=> dlgC.close();
   document.getElementById("yesNew").onclick = ()=>{
-    fields.forEach(el=> el.value = ""); updateGrades();
+    fields.forEach(el=> el.value = ""); ptypeSel.value = "0"; updateGrades();
     checks = [false,false,false,false,false];
     renderChecks(); sync(); save(); dlgC.close();
     window.scrollTo(0,0);
