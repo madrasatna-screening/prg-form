@@ -968,5 +968,68 @@ form.addEventListener("submit", async e => {
   }
 });
 </script>
+
+<!-- ===== اسم المنتج تلقائي من الحساب + زرار القوائم للأدمن بس ===== -->
+<style>
+  .combo.locked::after,.combo.locked .cl{display:none!important}
+  .combo.locked input{background:#f3f5f8;cursor:default;padding-left:6px}
+</style>
+<script type="module">
+import { getApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const app = getApp();
+const auth = getAuth(app), db = getFirestore(app);
+const ADMIN = "admin@prg.local";
+
+// fallback for accounts made before the admin page had an Arabic-name field
+const KNOWN = {
+  "diaa.atef":"ضياء عاطف", "ahmed.diaa":"أحمد ضياء", "nouf.sennary":"نوف سناري",
+  "ahmed.hegawy":"أحمد الحجاوي", "ayman.youssef":"أيمن يوسف", "zahra.hassan":"زهرة حسن",
+  "ahmed.diab":"أحمد دياب", "haitham.elazar":"هيثم الأزعر", "haitham.elsawy":"هيثم الصاوي",
+  "aya.emad":"آية عماد", "mazen.shahin":"مازن شاهين", "diaa.roshdy":"ضياء رشدي"
+};
+
+const input = document.querySelector('[data-k="producer"]');
+const box = input && input.closest(".combo");
+let myName = "";
+const listsBtn = document.getElementById("btnLists");
+if (listsBtn) listsBtn.style.display = "none";                         // only the admin edits the lists
+
+function apply(){
+  if (!input || !myName) return;
+  if (input.value !== myName) {
+    input.value = myName;
+    input.dispatchEvent(new Event("input", { bubbles: true }));   // keeps the print copy and the saved draft in step
+  }
+}
+function lock(on){
+  if (!input) return;
+  input.readOnly = on;
+  box && box.classList.toggle("locked", on);
+  input.title = on ? "اسم المنتج بيتكتب تلقائي من حسابك" : "";
+}
+
+onAuthStateChanged(auth, async u => {
+  myName = "";
+  if (listsBtn) listsBtn.style.display = (u && u.email === ADMIN) ? "" : "none";
+  if (!u || u.email === ADMIN) { lock(false); return; }     // admin keeps the normal drop-down
+  const username = u.email.split("@")[0];
+  try {
+    const snap = await getDoc(doc(db, "allowed", u.uid));
+    if (snap.exists() && snap.data().displayName) myName = String(snap.data().displayName).trim();
+  } catch (e) { /* offline: fall back below */ }
+  if (!myName) myName = KNOWN[username] || "";
+  if (!myName) { lock(false); return; }                       // no name on file: leave the field as it was
+  lock(true); apply();
+});
+
+// "استمارة جديدة" empties every field: put the name back right after
+document.getElementById("yesNew")?.addEventListener("click", () => setTimeout(apply, 0));
+// and make sure it's there whenever the person is about to print
+document.getElementById("btnPrint")?.addEventListener("pointerdown", apply, true);
+window.addEventListener("beforeprint", apply);
+</script>
 </body>
 </html>
