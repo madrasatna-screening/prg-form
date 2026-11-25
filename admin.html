@@ -78,10 +78,11 @@
         <form id="uf" class="row" style="margin-top:8px">
           <div><label>اسم المستخدم (إنجليزي)</label><input id="nu" dir="ltr" autocapitalize="none" placeholder="ahmed"></div>
           <div><label>الباسورد (6 حروف على الأقل)</label><input id="np" dir="ltr"></div>
+          <div><label>الاسم بالعربي (بيظهر في خانة المنتج)</label><input id="nn" placeholder="أحمد ضياء"></div>
           <button class="btn p" type="submit">إضافة</button>
         </form>
         <div class="msg" id="um"></div>
-        <div class="msg">لو الاسم موجود قبل كده وكان موقوف، اكتب نفس باسورده وهيتفعّل تاني.</div>
+        <div class="msg">لو الاسم موجود قبل كده وكان موقوف، اكتب نفس باسورده وهيتفعّل تاني. أول ما المستخدم يدخل بالباسورد اللي إنت كتبته، الاستمارة هتطلب منه يغيّره.</div>
       </div>
       <div class="card"><b>المستخدمين المفعّلين</b>
         <div class="scroll"><table id="ut"></table></div>
@@ -204,8 +205,8 @@ $("csv").onclick = () => {
 async function loadUsers() {
   const snap = await getDocs(collection(db, "allowed"));
   const list = snap.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => String(a.username).localeCompare(b.username));
-  $("ut").innerHTML = "<tr><th>المستخدم</th><th></th></tr>"
-    + list.map(u => `<tr><td>${esc(u.username)}</td><td><button class="btn d" data-stop="${esc(u.uid)}">إيقاف</button></td></tr>`).join("");
+  $("ut").innerHTML = "<tr><th>المستخدم</th><th>الاسم</th><th>غيّر الباسورد المؤقت؟</th><th></th></tr>"
+    + list.map(u => `<tr><td>${esc(u.username)}</td><td>${esc(u.displayName || "")}</td><td>${u.mustChange ? "لسه" : "أيوه"}</td><td><button class="btn d" data-stop="${esc(u.uid)}">إيقاف</button></td></tr>`).join("");
 }
 $("ut").addEventListener("click", async e => {
   const b = e.target.closest("[data-stop]"); if (!b) return;
@@ -227,10 +228,10 @@ $("uf").addEventListener("submit", async e => {
       if (err.code !== "auth/email-already-in-use") throw err;
       uid = (await signInWithEmailAndPassword(secAuth, email, pw)).user.uid; again = true;   // existing user: re-activate
     }
-    await setDoc(doc(db, "allowed", uid), { username: name, createdAt: serverTimestamp() });
+    await setDoc(doc(db, "allowed", uid), { username: name, displayName: $("nn").value.trim(), createdAt: serverTimestamp(), mustChange: true });
     await signOut(secAuth);
     umsg(again ? "المستخدم اتفعّل تاني" : "المستخدم اتضاف", true);
-    $("nu").value = ""; $("np").value = "";
+    $("nu").value = ""; $("np").value = ""; $("nn").value = "";
     loadUsers();
   } catch (err) {
     umsg(err.code === "auth/invalid-credential" || err.code === "auth/wrong-password"
