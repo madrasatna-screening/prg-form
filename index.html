@@ -732,5 +732,134 @@
   load();
 })();
 </script>
+  <!-- ===== تسجيل الدخول وتسجيل التسليمات (Firebase) ===== -->
+<style>
+  .authov{position:fixed;inset:0;z-index:9999;background:#e6e8eb;display:flex;align-items:center;justify-content:center;direction:rtl;font-family:"Segoe UI",Tahoma,Arial,sans-serif}
+  .authov[hidden]{display:none}
+  .authbox{background:#fff;border-radius:12px;padding:24px;width:min(360px,92vw);box-shadow:0 4px 20px rgba(0,0,0,.18)}
+  .authbox h2{margin:0 0 14px;font-size:18px;text-align:center}
+  .authbox input{width:100%;margin-bottom:10px;padding:10px;font-size:15px;border:1px solid #9aa4b0;border-radius:6px;box-sizing:border-box}
+  .authbox button{width:100%;padding:10px;font-size:15px;border:0;border-radius:6px;background:#1f5fbf;color:#fff;cursor:pointer}
+  .authmsg{color:#b00020;font-size:13px;min-height:18px;margin-bottom:8px;text-align:center}
+  a.btn{text-decoration:none;display:inline-block}
+  @media print{.authov{display:none!important}}
+</style>
+
+<div class="authov" id="authov">
+  <div class="authbox">
+    <h2>تسجيل الدخول</h2>
+    <div id="authload" style="text-align:center">جاري التحميل…</div>
+    <form id="authform" hidden>
+      <input id="authuser" placeholder="اسم المستخدم" autocomplete="username" autocapitalize="none" dir="ltr">
+      <input id="authpass" type="password" placeholder="الباسورد" autocomplete="current-password" dir="ltr">
+      <div class="authmsg" id="authmsg"></div>
+      <button type="submit">دخول</button>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
+  from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp, increment }
+  from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBR-MeJoQ1MAIATbB9rW5ut14VXjixpM_c",
+  authDomain: "prg-screening.firebaseapp.com",
+  projectId: "prg-screening",
+  storageBucket: "prg-screening.firebasestorage.app",
+  messagingSenderId: "927135609781",
+  appId: "1:927135609781:web:c35a1027e813c8734f5ffc"
+};
+const ADMIN = "admin@prg.local";
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app), db = getFirestore(app);
+
+const ov = document.getElementById("authov"), form = document.getElementById("authform"),
+      load = document.getElementById("authload"), msg = document.getElementById("authmsg");
+
+// if the login service can't be reached, say so instead of staying on "loading"
+const timer = setTimeout(() => { load.textContent = "مش قادر أوصل لخدمة الدخول. اتأكد من النت وأعمل ريفريش."; }, 10000);
+
+/* toolbar items shown after login */
+const bar = document.querySelector(".toolbar");
+const who = document.createElement("span"); who.className = "saved";
+const outBtn = document.createElement("button"); outBtn.className = "btn"; outBtn.textContent = "تسجيل خروج";
+const adminLink = document.createElement("a"); adminLink.className = "btn"; adminLink.href = "admin.html"; adminLink.textContent = "لوحة الأدمن";
+outBtn.onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, u => {
+  clearTimeout(timer); load.hidden = true;
+  if (u) {
+    ov.hidden = true;
+    who.textContent = "👤 " + u.email.split("@")[0];
+    bar.append(who);
+    if (u.email === ADMIN) bar.append(adminLink); else adminLink.remove();
+    bar.append(outBtn);
+  } else {
+    who.remove(); adminLink.remove(); outBtn.remove();
+    ov.hidden = false; form.hidden = false;
+  }
+});
+
+form.addEventListener("submit", async e => {
+  e.preventDefault(); msg.textContent = "";
+  const name = document.getElementById("authuser").value.trim().toLowerCase().split("@")[0];
+  const pass = document.getElementById("authpass").value;
+  if (!name || !pass) { msg.textContent = "اكتب اسم المستخدم والباسورد"; return; }
+  try { await signInWithEmailAndPassword(auth, name + "@prg.local", pass); form.reset(); }
+  catch (err) { msg.textContent = err.code === "auth/network-request-failed" ? "مفيش اتصال بالنت" : "اسم المستخدم أو الباسورد غلط"; }
+});
+
+/* read what's written in the form */
+const val = k => (document.querySelector('[data-k="' + k + '"]')?.value || "").trim();
+function collect() {
+  const pt = document.querySelector('[data-k="ptype"]');
+  return {
+    code: val("desc1"), channel: val("channel"),
+    programType: pt && pt.selectedIndex >= 0 ? pt.options[pt.selectedIndex].text : "",
+    grade: val("grade"), subject: val("subject"), episode: val("episode"),
+    producer: val("producer"), presenter: val("presenter"), term: val("term"),
+    receivingDate: val("recvDate"), broadcastDate: val("bcDate")
+  };
+}
+
+/* one record per person per code; printing again only bumps the counter */
+async function record(u, d) {
+  const username = u.email.split("@")[0];
+  const ref = doc(db, "submissions", u.uid + "_" + encodeURIComponent(d.code));
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, { ...d, uid: u.uid, username, ts: serverTimestamp(), lastPrintedAt: serverTimestamp(), prints: 1 });
+  } else {
+    await updateDoc(ref, { ...d, uid: u.uid, username, lastPrintedAt: serverTimestamp(), prints: increment(1) });
+  }
+}
+
+/* intercept the print button: record first, then let the normal print continue */
+let pass = false;
+document.addEventListener("click", async e => {
+  const b = e.target.closest && e.target.closest("#btnPrint");
+  if (!b) return;
+  if (pass) { pass = false; return; }
+  e.stopPropagation(); e.preventDefault();
+  const u = auth.currentUser;
+  if (!u) { ov.hidden = false; form.hidden = false; return; }
+  const d = collect();
+  if (!d.code) { alert("الكود (DESCRIPTION) فاضي. اختار البرنامج والصف والمادة واكتب رقم الحلقة الأول عشان التسليم يتسجّل."); return; }
+  b.disabled = true;
+  try { await record(u, d); }
+  catch (err) {
+    b.disabled = false;
+    alert(err.code === "permission-denied"
+      ? "حسابك مش مفعّل أو موقوف. كلّم الأدمن."
+      : "مقدرتش أسجّل التسليم (" + (err.code || err.message) + "). اتأكد من النت وجرّب تاني.");
+    return;
+  }
+  b.disabled = false; pass = true; b.click();
+}, true);
+</script>
 </body>
 </html>
