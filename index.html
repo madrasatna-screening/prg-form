@@ -861,5 +861,112 @@ document.addEventListener("click", async e => {
   b.disabled = false; pass = true; b.click();
 }, true);
 </script>
+
+<!-- ===== تغيير الباسورد (إجباري أول مرة بالباسورد المؤقت) ===== -->
+<style>
+  .pwov{position:fixed;inset:0;z-index:10000;background:rgba(20,28,38,.85);display:flex;align-items:center;justify-content:center;direction:rtl;font-family:"Segoe UI",Tahoma,Arial,sans-serif}
+  .pwov[hidden]{display:none}
+  .pwbox{background:#fff;border-radius:12px;padding:24px;width:min(380px,92vw);box-shadow:0 4px 20px rgba(0,0,0,.25)}
+  .pwbox h2{margin:0 0 6px;font-size:18px;text-align:center}
+  .pwbox p{margin:0 0 14px;font-size:13px;color:#444;text-align:center}
+  .pwbox input{width:100%;margin-bottom:10px;padding:10px;font-size:15px;border:1px solid #9aa4b0;border-radius:6px;box-sizing:border-box}
+  .pwbox button{width:100%;padding:10px;font-size:15px;border:0;border-radius:6px;background:#1f5fbf;color:#fff;cursor:pointer}
+  .pwbox button.sec{background:#e3e6ea;color:#111;margin-top:8px}
+  .pwmsg{color:#b00020;font-size:13px;min-height:18px;margin-bottom:8px;text-align:center}
+  .pwmsg.ok{color:#116611}
+  @media print{.pwov{display:none!important}}
+</style>
+
+<div class="pwov" id="pwov" hidden>
+  <div class="pwbox">
+    <h2>تغيير الباسورد</h2>
+    <p id="pwnote">اختار باسورد جديد ليك.</p>
+    <form id="pwform">
+      <input id="pwold" type="password" placeholder="الباسورد الحالي" autocomplete="current-password" dir="ltr">
+      <input id="pwnew" type="password" placeholder="الباسورد الجديد (6 حروف على الأقل)" autocomplete="new-password" dir="ltr">
+      <input id="pwnew2" type="password" placeholder="اكتب الباسورد الجديد تاني" autocomplete="new-password" dir="ltr">
+      <div class="pwmsg" id="pwmsg"></div>
+      <button type="submit" id="pwsave">حفظ الباسورد الجديد</button>
+      <button type="button" class="sec" id="pwcancel">إلغاء</button>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+import { getApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential, updatePassword }
+  from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+// uses the same Firebase app that the login script above already started
+const app = getApp();
+const auth = getAuth(app), db = getFirestore(app);
+const ADMIN = "admin@prg.local";
+
+const $ = id => document.getElementById(id);
+const ov = $("pwov"), form = $("pwform"), msg = $("pwmsg");
+let forced = false;
+
+// toolbar button, shown while someone is signed in
+const pwBtn = document.createElement("button");
+pwBtn.className = "btn"; pwBtn.textContent = "🔑 تغيير الباسورد";
+pwBtn.onclick = () => open(false);
+
+function open(isForced){
+  forced = isForced;
+  form.reset(); msg.textContent = ""; msg.className = "pwmsg";
+  $("pwnote").textContent = isForced
+    ? "دي أول مرة تدخل. لازم تغيّر الباسورد المؤقت اللي خدته من الأدمن قبل ما تستخدم الاستمارة."
+    : "اختار باسورد جديد ليك.";
+  $("pwcancel").hidden = isForced;          // no way out of the forced change
+  ov.hidden = false;
+  setTimeout(() => $("pwold").focus(), 50);
+}
+function close(){ ov.hidden = true; forced = false; }
+$("pwcancel").onclick = close;
+
+onAuthStateChanged(auth, async u => {
+  if (!u) { pwBtn.remove(); close(); return; }
+  document.querySelector(".toolbar")?.append(pwBtn);
+  if (u.email === ADMIN) return;
+  try {
+    const snap = await getDoc(doc(db, "allowed", u.uid));
+    if (snap.exists() && snap.data().mustChange === true) open(true);
+  } catch (e) { /* no access / offline: nothing to force */ }
+});
+
+form.addEventListener("submit", async e => {
+  e.preventDefault(); msg.className = "pwmsg"; msg.textContent = "";
+  const u = auth.currentUser;
+  if (!u) { close(); return; }
+  const oldPw = $("pwold").value, pw = $("pwnew").value, pw2 = $("pwnew2").value;
+  if (!oldPw || !pw) { msg.textContent = "اكتب الباسورد الحالي والجديد"; return; }
+  if (pw.length < 6) { msg.textContent = "الباسورد الجديد لازم يكون 6 حروف على الأقل"; return; }
+  if (pw !== pw2) { msg.textContent = "الباسورد الجديد مش زي اللي كتبته تاني"; return; }
+  if (pw === oldPw) { msg.textContent = "اختار باسورد مختلف عن الحالي"; return; }
+  $("pwsave").disabled = true;
+  try {
+    await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, oldPw));
+    await updatePassword(u, pw);
+    if (u.email !== ADMIN) {
+      try { await updateDoc(doc(db, "allowed", u.uid), { mustChange: false, pwChangedAt: serverTimestamp() }); }
+      catch (e2) { /* password already changed; the flag just stays */ }
+    }
+    msg.className = "pwmsg ok"; msg.textContent = "✔ الباسورد اتغيّر";
+    setTimeout(close, 1200);
+  } catch (err) {
+    const c = err.code || "";
+    msg.textContent =
+      (c === "auth/invalid-credential" || c === "auth/wrong-password") ? "الباسورد الحالي غلط" :
+      c === "auth/weak-password" ? "الباسورد الجديد ضعيف، اختار واحد أطول" :
+      c === "auth/too-many-requests" ? "محاولات كتير، استنى شوية وجرّب تاني" :
+      c === "auth/network-request-failed" ? "مفيش اتصال بالنت" :
+      "خطأ: " + (c || err.message);
+  } finally {
+    $("pwsave").disabled = false;
+  }
+});
+</script>
 </body>
 </html>
