@@ -1025,5 +1025,48 @@ document.getElementById("yesNew")?.addEventListener("click", () => setTimeout(ap
 document.getElementById("btnPrint")?.addEventListener("pointerdown", apply, true);
 window.addEventListener("beforeprint", apply);
 </script>
+
+<!-- ===== لو الصفحة مفتوحة جوه واتساب/فيسبوك: الطباعة مش مدعومة، نوجّه لـ Chrome/Safari ===== -->
+<style>
+  .inapp{position:relative;z-index:9000;background:#fff3cd;color:#5c4400;border-bottom:2px solid #e0b100;
+    padding:10px 14px;direction:rtl;font-family:"Segoe UI",Tahoma,Arial,sans-serif;font-size:14px;line-height:1.6;text-align:center}
+  .inapp b{display:block;font-size:15px;margin-bottom:4px}
+  .inapp a,.inapp button{display:inline-block;margin:6px 4px 0;padding:8px 14px;border:0;border-radius:6px;
+    background:#1f5fbf;color:#fff;font:inherit;font-size:14px;text-decoration:none;cursor:pointer}
+  .inapp button.sec{background:#5c6773}
+  @media print{.inapp{display:none!important}}
+</style>
+<script>
+(function(){
+  var ua = navigator.userAgent || "";
+  var inApp = /WhatsApp|FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|Messenger|TikTok|; wv\)/i.test(ua);
+  if (!inApp) return;
+  var isAndroid = /Android/i.test(ua), isIOS = /iPhone|iPad|iPod/i.test(ua);
+  var url = location.href;
+  var openHref = isAndroid
+    ? "intent://" + url.replace(/^https?:\/\//, "") + "#Intent;scheme=https;package=com.android.chrome;end"
+    : isIOS ? "x-safari-" + url : url;
+  var bar = document.createElement("div");
+  bar.className = "inapp";
+  bar.innerHTML = "<b>⚠️ الطباعة مش هتشتغل من جوه واتساب</b>" +
+    "افتح الاستمارة في " + (isIOS ? "Safari" : "Chrome") + " عشان تقدر تطبع." +
+    "<br><a id='inappOpen' href='" + openHref + "'>افتح في " + (isIOS ? "Safari" : "Chrome") + "</a>" +
+    "<button class='sec' id='inappCopy' type='button'>انسخ اللينك</button>";
+  document.body.insertBefore(bar, document.body.firstChild);
+  document.getElementById("inappCopy").onclick = function(){
+    var b = this;
+    var done = function(){ b.textContent = "✓ اتنسخ، الصقه في " + (isIOS ? "Safari" : "Chrome"); };
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, function(){ prompt("انسخ اللينك ده:", url); });
+    else prompt("انسخ اللينك ده:", url);
+  };
+  // the print button can't work here: say why instead of doing nothing (and don't record a delivery)
+  window.addEventListener("click", function(e){
+    if (!(e.target.closest && e.target.closest("#btnPrint"))) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    alert("الطباعة مش مدعومة من جوه واتساب.\nدوس \"افتح في " + (isIOS ? "Safari" : "Chrome") + "\" اللي فوق، أو انسخ اللينك وافتحه هناك.");
+    window.scrollTo(0, 0);
+  }, true);
+})();
+</script>
 </body>
 </html>
