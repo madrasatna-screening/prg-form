@@ -885,7 +885,7 @@ pdfBtn?.addEventListener("click", async () => {
   a.href = URL.createObjectURL(blob); a.download = d.code.replace(/[\\/:*?"<>|]+/g, "_") + ".pdf";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-  try { await record(u, d); done("✓ اتحفظ واتسجّل"); }
+  try { await record(u, d); done("✓ اتحفظ واتسجّل"); setTimeout(() => document.getElementById("yesNew")?.click(), 400); }
   catch (err) {
     alert(err.code === "permission-denied"
       ? "الـ PDF اتحفظ بس التسليم متسجلش: حسابك مش مفعّل أو موقوف. كلّم الأدمن."
