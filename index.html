@@ -163,6 +163,7 @@
   <button class="btn" id="btnLists">⚙️ تعديل القوائم</button>
   <button class="btn danger" id="btnNew">🗒️ استمارة جديدة</button>
   <button class="btn primary" id="btnPrint">🖨️ طباعة</button>
+  <button class="btn" id="btnSavePdf" style="background:#1d7a3a">📄 حفظ PDF (تسليم)</button>
 </div>
 
 <div class="sheet" id="sheet">
@@ -839,21 +840,59 @@ async function record(u, d) {
 }
 
 /* intercept the print button: record first, then let the normal print continue */
-/* print opens right away (browsers drop print() that comes after waiting on the network);
-   the delivery is recorded in the background at the same moment */
+/* printing needs a login but no longer counts; a delivery is counted when the PDF is saved */
 document.addEventListener("click", e => {
   const b = e.target.closest && e.target.closest("#btnPrint");
-  if (!b) return;
-  const u = auth.currentUser;
-  if (!u) { e.stopPropagation(); e.preventDefault(); ov.hidden = false; form.hidden = false; return; }
-  const d = collect();
-  if (!d.code) { e.stopPropagation(); e.preventDefault(); alert("الكود (DESCRIPTION) فاضي. اختار البرنامج والصف والمادة واكتب رقم الحلقة الأول عشان التسليم يتسجّل."); return; }
-  record(u, d).catch(err => {
-    setTimeout(() => alert(err.code === "permission-denied"
-      ? "الاستمارة اتطبعت بس التسليم متسجلش: حسابك مش مفعّل أو موقوف. كلّم الأدمن."
-      : "الاستمارة اتطبعت بس التسليم متسجلش (" + (err.code || err.message) + "). اتأكد من النت واطبع تاني."), 300);
-  });
+  if (!b || auth.currentUser) return;
+  e.stopPropagation(); e.preventDefault(); ov.hidden = false; form.hidden = false;
 }, true);
+
+const pdfBtn = document.getElementById("btnSavePdf");
+const PDF_TXT = pdfBtn ? pdfBtn.textContent : "";
+const loadJs = src => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+async function makePdf() {
+  if (!window.htmlToImage) await loadJs("https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js");
+  if (!window.jspdf) await loadJs("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+  window.dispatchEvent(new Event("beforeprint"));               // fills the print copy of every field
+  document.documentElement.style.setProperty("--pz", "1");
+  const sheet = document.getElementById("sheet");
+  sheet.classList.add("pdfmode");
+  try {
+    const url = await window.htmlToImage.toJpeg(sheet, { pixelRatio: 2.5, quality: 0.95, backgroundColor: "#ffffff" });
+    const img = new Image(); img.src = url; await img.decode();
+    const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const M = 6, maxW = 210 - 2 * M, maxH = 297 - 2 * M;
+    let w = maxW, h = img.height * w / img.width;
+    if (h > maxH) { h = maxH; w = img.width * h / img.height; }
+    pdf.addImage(url, "JPEG", (210 - w) / 2, M, w, h);
+    return pdf.output("blob");
+  } finally {
+    sheet.classList.remove("pdfmode");
+    window.dispatchEvent(new Event("afterprint"));
+  }
+}
+pdfBtn?.addEventListener("click", async () => {
+  const u = auth.currentUser;
+  if (!u) { ov.hidden = false; form.hidden = false; return; }
+  const d = collect();
+  if (!d.code) { alert("الكود (DESCRIPTION) فاضي. اختار البرنامج والصف والمادة واكتب رقم الحلقة الأول."); return; }
+  const done = t => { pdfBtn.textContent = t; setTimeout(() => { pdfBtn.textContent = PDF_TXT; pdfBtn.disabled = false; }, 2500); };
+  pdfBtn.disabled = true; pdfBtn.textContent = "⏳ جاري تجهيز الـ PDF…";
+  let blob;
+  try { blob = await makePdf(); }
+  catch (err) { alert("معرفتش أجهز الـ PDF. اتأكد من النت وجرّب تاني."); pdfBtn.textContent = PDF_TXT; pdfBtn.disabled = false; return; }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = d.code.replace(/[\\/:*?"<>|]+/g, "_") + ".pdf";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  try { await record(u, d); done("✓ اتحفظ واتسجّل"); }
+  catch (err) {
+    alert(err.code === "permission-denied"
+      ? "الـ PDF اتحفظ بس التسليم متسجلش: حسابك مش مفعّل أو موقوف. كلّم الأدمن."
+      : "الـ PDF اتحفظ بس التسليم متسجلش (" + (err.code || err.message) + "). اتأكد من النت ودوس حفظ PDF تاني.");
+    done(PDF_TXT);
+  }
+});
 </script>
 
 <!-- ===== تغيير الباسورد (إجباري أول مرة بالباسورد المؤقت) ===== -->
@@ -1061,9 +1100,9 @@ window.addEventListener("beforeprint", apply);
   };
   // the print button can't work here: say why instead of doing nothing (and don't record a delivery)
   window.addEventListener("click", function(e){
-    if (!(e.target.closest && e.target.closest("#btnPrint"))) return;
+    if (!(e.target.closest && e.target.closest("#btnPrint, #btnSavePdf"))) return;
     e.stopImmediatePropagation(); e.preventDefault();
-    alert("الطباعة مش مدعومة من جوه واتساب.\nدوس \"افتح في " + (isIOS ? "Safari" : "Chrome") + "\" اللي فوق، أو انسخ اللينك وافتحه هناك.");
+    alert("الطباعة وحفظ الـ PDF مش مدعومين من جوه واتساب.\nدوس \"افتح في " + (isIOS ? "Safari" : "Chrome") + "\" اللي فوق، أو انسخ اللينك وافتحه هناك.");
     window.scrollTo(0, 0);
   }, true);
 })();
