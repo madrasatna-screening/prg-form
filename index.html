@@ -839,26 +839,20 @@ async function record(u, d) {
 }
 
 /* intercept the print button: record first, then let the normal print continue */
-let pass = false;
-document.addEventListener("click", async e => {
+/* print opens right away (browsers drop print() that comes after waiting on the network);
+   the delivery is recorded in the background at the same moment */
+document.addEventListener("click", e => {
   const b = e.target.closest && e.target.closest("#btnPrint");
   if (!b) return;
-  if (pass) { pass = false; return; }
-  e.stopPropagation(); e.preventDefault();
   const u = auth.currentUser;
-  if (!u) { ov.hidden = false; form.hidden = false; return; }
+  if (!u) { e.stopPropagation(); e.preventDefault(); ov.hidden = false; form.hidden = false; return; }
   const d = collect();
-  if (!d.code) { alert("الكود (DESCRIPTION) فاضي. اختار البرنامج والصف والمادة واكتب رقم الحلقة الأول عشان التسليم يتسجّل."); return; }
-  b.disabled = true;
-  try { await record(u, d); }
-  catch (err) {
-    b.disabled = false;
-    alert(err.code === "permission-denied"
-      ? "حسابك مش مفعّل أو موقوف. كلّم الأدمن."
-      : "مقدرتش أسجّل التسليم (" + (err.code || err.message) + "). اتأكد من النت وجرّب تاني.");
-    return;
-  }
-  b.disabled = false; pass = true; b.click();
+  if (!d.code) { e.stopPropagation(); e.preventDefault(); alert("الكود (DESCRIPTION) فاضي. اختار البرنامج والصف والمادة واكتب رقم الحلقة الأول عشان التسليم يتسجّل."); return; }
+  record(u, d).catch(err => {
+    setTimeout(() => alert(err.code === "permission-denied"
+      ? "الاستمارة اتطبعت بس التسليم متسجلش: حسابك مش مفعّل أو موقوف. كلّم الأدمن."
+      : "الاستمارة اتطبعت بس التسليم متسجلش (" + (err.code || err.message) + "). اتأكد من النت واطبع تاني."), 300);
+  });
 }, true);
 </script>
 
